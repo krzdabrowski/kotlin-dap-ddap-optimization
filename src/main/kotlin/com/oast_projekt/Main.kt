@@ -72,8 +72,7 @@ private fun evolutionaryAlgorithm() {
         val maxTime = askUserForInt("Choose max work time of the algorithm [s]: ")
         val maxNumberOfGenerations = askUserForInt("Choose max number of generations: ")
         val maxNumberOfMutations = askUserForInt("Choose max number of mutations: ")
-        val maxNumberOfContinuousNonBetterSolutions =
-            askUserForInt("Choose max number of the best solution improvement attempts: ")
+        val maxNumberOfContinuousNonBetterSolutions = askUserForInt("Choose max number of the best solution improvement attempts: ")
         val seed = askUserForLong("Choose random number generator seed: ")
         dapOrDdap = askUserForStringWhenChoiceIs("Choose problem to solve (DAP/DDAP): ", "DAP", "DDAP")
 
@@ -94,7 +93,8 @@ private fun evolutionaryAlgorithm() {
 private fun showTotalTimeAndSaveToFile(typeOfAlgorithm: String, solution: Solution?, solutions: List<Solution>?, network: Network, startTime: Long, endTime: Long) {
     println("Time of optimization: " + (endTime - startTime) / 1_000_000_000 + "," + ((endTime - startTime) / 1_000_000 - (endTime - startTime) / 1_000_000_000 * 1_000) + " s")
     OutputWriter().writeSolutionToFile(path + "_solution_${typeOfAlgorithm}_${dapOrDdap}", solution, network)
-    if (solutions != null)
+    if (solutions != null) {
         println("Saving all results to a file, this may take some additional time...")
         OutputWriter().writeAllSolutionsToFile(path + "_allsolutions_${typeOfAlgorithm}_${dapOrDdap}", solutions, network)
+    }
 }

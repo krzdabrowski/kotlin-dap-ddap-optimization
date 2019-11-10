@@ -4,14 +4,15 @@ import com.oast_projekt.model.*
 import com.oast_projekt.utils.computeLinksCapacitiesOfSolution
 import com.oast_projekt.utils.fillLinkCapacitiesForNewSolutions
 import com.oast_projekt.utils.getCombinationsOfOneDemand
-import java.lang.Math.*
 
 import java.util.*
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 class EvolutionaryAlgorithm(
-    private val pCross: Float,
-    private val pMutate: Float,
-    private val maxTime: Int,  // czas w sekundach
+    private val crossoverProb: Float,
+    private val mutationProb: Float,
+    private val maxTime: Int,  // secs
     private val numberOfChromosomes: Int,
     private val percentOfBestChromosomes: Float,
     private val numberOfGenerations: Int,
@@ -20,186 +21,203 @@ class EvolutionaryAlgorithm(
     private val seed: Long,
     val network: Network
 ) {
-    private val random: Random = Random(seed)
+    private val random = Random(seed)
 
-    // ograniczenia
+    // ograniczenia (stop criteria)
     private var endTime = 0L
-
-    // aktualny stan
     private var currentGeneration = 0
     private var currentMutation = 0
     private var currentNumberOfContinuousNonBetterSolutions = 0
 
-    /**
-     * @return True if the loop should go on
-     */
-    private fun computeStopCriterion(): Boolean {
-
-        if (System.currentTimeMillis() >= endTime)
-            return false
-
-        if (currentGeneration >= numberOfGenerations)
-            return false
-
-        if (currentMutation >= maxMutationNumber)
-            return false
-
+    private fun checkStopCriteria(): Boolean {
+        if (System.currentTimeMillis() >= endTime) return false
+        if (currentGeneration >= numberOfGenerations) return false
+        if (currentMutation >= maxMutationNumber) return false
         return currentNumberOfContinuousNonBetterSolutions < maxNumberOfContinuousNonBetterSolutions
     }
 
+    private fun getInitialRandomPopulation(numberOfChromosomes: Int): List<Solution> {
+        val allCombinations = network.demands.map { getCombinationsOfOneDemand(it) }
+        val allRoutingPossibilities = mutableListOf<Solution>()
+        val population = mutableListOf<Solution>()
+
+        // dodaj wszystkie mozliwe chromosomy z kombinacji routingu sieci
+        for (i in 0 until numberOfChromosomes) {
+            val chromosome = Solution(mutableMapOf())
+            for (j in allCombinations.indices) {
+                chromosome.mapOfValues.putAll(allCombinations[j][random.nextInt(allCombinations[j].size)].mapOfValues)
+            }
+            allRoutingPossibilities.add(chromosome)
+        }
+
+        val linksCapacities = allRoutingPossibilities.map { computeLinksCapacitiesOfSolution(it, network) }
+
+        // wybierz losowo z wszystkich numberOfChromosomes tworzacych populacje
+        for (i in 0 until numberOfChromosomes) {
+            val rand = random.nextInt(allRoutingPossibilities.size)
+            allRoutingPossibilities[rand].capacitiesOfLinks = linksCapacities[rand]
+            population.add(allRoutingPossibilities[rand])
+        }
+        return population
+    }
+
     fun computeDDAP(): Solution {
-        //Początkowa pula rozwiązań - chromosomy
-        var population = getInitialRandomPopulation(numberOfChromosomes, seed)
+        var population = getInitialRandomPopulation(numberOfChromosomes)
+        var bestSolution = Solution(mutableMapOf())
+        bestSolution.cost = Double.MAX_VALUE
 
-        //Startowe najlepsze rozwiązania - koszt = infinity
-        var bestSolution = Solution(HashMap())
-        bestSolution.cost = Float.MAX_VALUE
-
-        //maxTime w sec
         endTime = System.currentTimeMillis() + maxTime * 1000
-        while (computeStopCriterion()) {
+        while (checkStopCriteria()) {
             currentGeneration++
 
-            var bestSolutionOfGeneration = Solution(HashMap())
-            bestSolutionOfGeneration.cost = Float.MAX_VALUE
+            var bestSolutionOfEachGeneration = Solution(mutableMapOf())
+            bestSolutionOfEachGeneration.cost = Double.MAX_VALUE
 
             for (i in population.indices) {
-
-                var cost = 0f
-                //Obliczamy koszt dla każdego z chromosomów
+                var cost = 0.0
                 val costsOfLinks = population[i].capacitiesOfLinks
                 for (j in population[i].capacitiesOfLinks!!.indices) {
-                    cost += (network.links[j].module.cost * costsOfLinks!![j]).toFloat()
-
+                    cost += network.links[j].module.cost * costsOfLinks!![j]  // sum delta(e) * y(e,x)
                 }
                 population[i].cost = cost
 
-                //zapisujemy najlepsze rozwiazanie w generacji
-                if (population[i].cost!! < bestSolutionOfGeneration.cost!!)
-                    bestSolutionOfGeneration = population[i]
+                if (population[i].cost!! < bestSolutionOfEachGeneration.cost!!)
+                    bestSolutionOfEachGeneration = population[i]  // najlepsze rozwiazanie w generacji
             }
 
-            // zapisujemy najlepsze rozwiazanie w historii
-            if (bestSolutionOfGeneration.cost!! < bestSolution.cost!!) {
-                bestSolution = bestSolutionOfGeneration
+            if (bestSolutionOfEachGeneration.cost!! < bestSolution.cost!!) {
+                bestSolution = bestSolutionOfEachGeneration  // najlepsze rozwiazanie ze wszystkich
                 currentNumberOfContinuousNonBetterSolutions = 0
             } else
                 currentNumberOfContinuousNonBetterSolutions++
 
-
             population = takeBestDDAP(population, percentOfBestChromosomes)
-            population = crossover(population, seed, pCross)
-            population = mutation(population, seed, pMutate)
+            population = crossover(population, crossoverProb)
+            population = mutation(population, mutationProb)
             population = fillLinkCapacitiesForNewSolutions(population, network)
-            // nie możemy w tym momencie wybrac najlepszych bo nie są obliczone koszta (dlatego przed mutacja)
 
-            println("Cost of generation " + currentGeneration + ": " + bestSolutionOfGeneration.cost)
+            println("Best cost for generation $currentGeneration: ${bestSolutionOfEachGeneration.cost}")
         }
-        println("Cost of best solution: " + bestSolution.cost!!)
+        println("Cost of total best solution: ${bestSolution.cost!!}")
+
+        return bestSolution
+    }
+
+    fun computeDAP(): Solution {
+        var population = getInitialRandomPopulation(numberOfChromosomes)
+        var bestSolution = Solution(mutableMapOf())
+        bestSolution.numberOfLinksWithExceededCapacity = Integer.MAX_VALUE
+
+        endTime = System.currentTimeMillis() + maxTime * 1000
+        while (checkStopCriteria()) {
+            currentGeneration++
+
+            var bestSolutionOfEachGeneration = Solution(mutableMapOf())
+            bestSolutionOfEachGeneration.numberOfLinksWithExceededCapacity = Integer.MAX_VALUE
+
+            for (i in population.indices) {
+                val maxValues = mutableListOf<Int>()
+                for (j in population[i].capacitiesOfLinks!!.indices) {
+                    maxValues.add(max(0, population[i].capacitiesOfLinks!![j] - network.links[j].numberOfModules))  // number of modules = number of fibre pairs in cable
+                }
+                population[i].numberOfLinksWithExceededCapacity = maxValues.filter { p -> p > 0 }.size
+
+                if (population[i].numberOfLinksWithExceededCapacity!! < bestSolutionOfEachGeneration.numberOfLinksWithExceededCapacity!!)
+                    bestSolutionOfEachGeneration = population[i]  // najlepsze rozwiazanie z generacji
+            }
+
+            if (bestSolutionOfEachGeneration.numberOfLinksWithExceededCapacity!! < bestSolution.numberOfLinksWithExceededCapacity!!) {
+                bestSolution = bestSolutionOfEachGeneration  // najlepsze rozwiazanie z wszystkich
+                currentNumberOfContinuousNonBetterSolutions = 0
+            } else
+                currentNumberOfContinuousNonBetterSolutions++
+
+            population = takeBestDAP(population, percentOfBestChromosomes)
+            population = crossover(population, crossoverProb)
+            population = mutation(population, mutationProb)
+            population = fillLinkCapacitiesForNewSolutions(population, network)
+
+            println("Overload of generation $currentGeneration: ${bestSolutionOfEachGeneration.numberOfLinksWithExceededCapacity}")
+        }
+        println("Overload of best solution: ${bestSolution.numberOfLinksWithExceededCapacity!!}")
 
         return bestSolution
     }
 
     private fun takeBestDDAP(solutions: List<Solution>, percentOfBestChromosomes: Float): MutableList<Solution> {
-        // Wybieramy x procent najlepszych
-        val subListEnd = round(solutions.size * (percentOfBestChromosomes / 100))
-        val list0 = solutions
-            .sortedWith(Comparator.comparing<Solution, Float> { it.cost })
+        val subListEnd = (solutions.size * (percentOfBestChromosomes / 100)).roundToInt()
 
-        val list = solutions
-            .sortedWith(Comparator.comparing<Solution, Float> { it.cost })
-            .subList(0, round(solutions.size * (percentOfBestChromosomes / 100)))
+        return solutions.sortedBy { it.cost }
+            .subList(0, subListEnd)  // wybieramy n procent najlepszych rozwiazan
             .toMutableList()
-
-        // Dopełniamy najlepszymi, aby populacja nie zmalała
-        list.addAll(list0.subList(0, solutions.size - subListEnd))
-
-        return list
+            .apply { addAll(subList(0, solutions.size - subListEnd)) }  // uzupelniamy populacje najlepszymi
     }
 
-    private fun crossover(parents: MutableList<Solution>, seed: Long, probabilityOfCrossover: Float): List<Solution> {
-        val children = ArrayList<Solution>()
+    private fun takeBestDAP(solutions: List<Solution>, percentOfBestChromosomes: Float): MutableList<Solution> {
+        val subListEnd = (solutions.size * (percentOfBestChromosomes / 100)).roundToInt()
 
-        val parentsSize = parents.size
-        //w jednej iteracji krzyżowanie 2 rodziców z listy, wiec liczba iteracji / 2
-        // wywalamy rodzicow z listy i bierzemy kolejnych 2
-        for (i in 0 until parentsSize / 2) {
-            children.addAll(
-                crossParents(
-                    parents.removeAt(random.nextInt(parents.size)),
-                    parents.removeAt(random.nextInt(parents.size)),
-                    probabilityOfCrossover, seed
-                )
-            )
+        return solutions.sortedBy { it.numberOfLinksWithExceededCapacity }
+            .subList(0, subListEnd)  // wybieramy n procent najlepszych rozwiazan
+            .toMutableList()
+            .apply { addAll(subList(0, solutions.size - subListEnd)) }  // uzupelniamy populacje najlepszymi
+    }
+
+    // region Genetic operators
+    private fun crossover(parents: MutableList<Solution>, probabilityOfCrossover: Float): List<Solution> {
+        val children = mutableListOf<Solution>()
+
+        // 2 rodzicow krzyzowanych naraz, wiec iteracji jest polowa
+        for (i in 0 until parents.size / 2) {
+            children.addAll(crossParents(parents.removeAt(random.nextInt(parents.size)), parents.removeAt(random.nextInt(parents.size)), probabilityOfCrossover))
         }
         return children
     }
 
-    private fun crossParents(parent0: Solution, parent1: Solution, probabilityOfCrossover: Float, seed: Long): List<Solution> {
-        var children: MutableList<Solution> = ArrayList()
+    private fun crossParents(firstParent: Solution, secondParent: Solution, probabilityOfCrossover: Float): List<Solution> {
         var rand = random.nextDouble()
 
-        // albo krzyżujemy rodziców i zwracamy dzieci, albo zwracamy rodziców
-        if (rand < probabilityOfCrossover) {
-            children = ArrayList()
-            children.add(Solution(HashMap()))
-            children.add(Solution(HashMap()))
+        return if (rand < probabilityOfCrossover) {
+            val children = mutableListOf<Solution>()
+            children.addAll(listOf(Solution(mutableMapOf()), Solution(mutableMapOf())))
 
-            for (i in 0 until parent0.numberOfGenes) {
+            for (i in 0 until firstParent.numberOfGenes) {
                 rand = random.nextDouble()
 
                 if (rand > 0.5) {
-                    children[0]
-                        .mapOfValues.putAll(parent0.getGene(i + 1))
-                    children[1]
-                        .mapOfValues
-                        .putAll(parent1.getGene(i + 1))
+                    children[0].mapOfValues.putAll(firstParent.getGene(i + 1))
+                    children[1].mapOfValues.putAll(secondParent.getGene(i + 1))
                 } else {
-                    children[1]
-                        .mapOfValues
-                        .putAll(parent0.getGene(i + 1))
-                    children[0]
-                        .mapOfValues
-                        .putAll(parent1.getGene(i + 1))
+                    children[1].mapOfValues.putAll(firstParent.getGene(i + 1))
+                    children[0].mapOfValues.putAll(secondParent.getGene(i + 1))
                 }
             }
-            return children
-        }
-
-        val solutions = ArrayList<Solution>()
-        solutions.add(parent0)
-        solutions.add(parent1)
-
-        return solutions
+            children  // zwracanie dzieci po skrzyzowaniu
+        } else listOf(firstParent, secondParent)  // w innym przypadku zwracanie rodzicow
     }
 
-    private fun mutation(population: List<Solution>, seed: Long, probabilityOfMutation: Float): MutableList<Solution> {
-        val mutants = ArrayList<Solution>()
-
+    private fun mutation(population: List<Solution>, probabilityOfMutation: Float): MutableList<Solution> {
         val rand = random.nextDouble()
 
-        for (i in population.indices) {
-            // Losowe wystąpienie mutacji
-            if (rand < probabilityOfMutation) {
+        return if (rand < probabilityOfMutation) {
+            val mutants = mutableListOf<Solution>()
 
+            for (i in population.indices) {
                 currentMutation++
-                val genes = HashMap<Point, Int>()
+                val genes = mutableMapOf<Point, Int>()
 
                 for (j in 0 until population[i].numberOfGenes) {
-                    genes.putAll(mutateGene(population[i].getGene(j + 1), seed))
+                    genes.putAll(mutateGene(population[i].getGene(j + 1)))
                 }
                 mutants.add(Solution(genes))
-            } else {
-                mutants.add(population[i])
             }
-        }
-        return mutants
+            mutants  // zwracanie zmutowanych rozwiazan
+        } else population.toMutableList()  // w innym przypadku brak mutacji
     }
 
-    private fun mutateGene(gene: Map<Point, Int>, seed: Long): Map<Point, Int> {
-        val mutatedGene = HashMap<Point, Int>()
-        val points = ArrayList<Point>()
-        val values = ArrayList<Int>()
+    private fun mutateGene(gene: Map<Point, Int>): Map<Point, Int> {
+        val mutatedGene = mutableMapOf<Point, Int>()
+        val points = mutableListOf<Point>()
+        val values = mutableListOf<Int>()
 
         for ((key, value) in gene) {
             points.add(key)
@@ -207,13 +225,12 @@ class EvolutionaryAlgorithm(
         }
 
         for (i in values.indices) {
+            val first = random.nextInt(values.size)
+            val second = random.nextInt(values.size)
 
-            val i0 = random.nextInt(values.size)
-            val i1 = random.nextInt(values.size)
-
-            if (values[i0] != 0) {
-                values[i0] = values[i0] - 1
-                values[i1] = values[i1] + 1
+            if (values[first] != 0) {
+                values[first] = values[first] - 1
+                values[second] = values[second] + 1
                 break
             }
         }
@@ -224,110 +241,5 @@ class EvolutionaryAlgorithm(
 
         return mutatedGene
     }
-
-    private fun getInitialRandomPopulation(numberOfChromosomes: Int, seed: Long): List<Solution> {
-
-        //Ze wszystkich możliwych kombinacji routingu (nie obliczone koszta itp) wybieramy losowe N chromosomow (numberOfChromosomes)
-        val allCombinations = network.demands
-            .map { getCombinationsOfOneDemand(it) }
-
-        val routingPossibilities = ArrayList<Solution>()
-
-        for (i in 0 until numberOfChromosomes) {
-            val chromosome = Solution(HashMap())
-            for (j in allCombinations.indices) {
-                chromosome.mapOfValues.putAll(allCombinations[j][random.nextInt(allCombinations[j].size)].mapOfValues)
-            }
-            routingPossibilities.add(chromosome)
-        }
-
-        val linksCapacities = routingPossibilities
-            .map { computeLinksCapacitiesOfSolution(it, network) }
-
-        val list = ArrayList<Solution>()
-
-        for (i in 0 until numberOfChromosomes) {
-            val rand = random.nextInt(routingPossibilities.size)
-            routingPossibilities[rand].capacitiesOfLinks = linksCapacities[rand]
-            list.add(routingPossibilities[rand])
-        }
-        return list
-    }
-
-    fun computeDAP(): Solution {
-        //Początkowa pula rozwiązań - chromosomy
-        var population = getInitialRandomPopulation(numberOfChromosomes, seed)
-
-        //Startowe najlepsze rozwiązania - koszt = infinity
-        var bestSolution = Solution(HashMap())
-        bestSolution.numberOfLinksWithExceededCapacity = Integer.MAX_VALUE
-
-        //maxTime w sec
-        endTime = System.currentTimeMillis() + maxTime * 1000
-
-        while (computeStopCriterion()) {
-            currentGeneration++
-
-            var bestSolutionOfGeneration = Solution(HashMap())
-            bestSolutionOfGeneration.numberOfLinksWithExceededCapacity = Integer.MAX_VALUE
-
-            for (i in population.indices) {
-
-                val maxValues = ArrayList<Int>()
-                for (j in population[i].capacitiesOfLinks!!.indices) {
-                    maxValues.add(
-                        max(
-                            0,
-                            population[i].capacitiesOfLinks!![j] - network.links[j].numberOfModules
-                        )
-                    )
-                }
-                population[i].numberOfLinksWithExceededCapacity =
-                    maxValues.filter { p -> p > 0 }.size
-
-
-                //zapisujemy najlepsze rozwiazanie w generacji
-                if (population[i].numberOfLinksWithExceededCapacity!! < bestSolutionOfGeneration.numberOfLinksWithExceededCapacity!!)
-                    bestSolutionOfGeneration = population[i]
-
-
-            }
-
-            // zapisujemy najlepsze rozwiazanie w historii
-            if (bestSolutionOfGeneration.numberOfLinksWithExceededCapacity!! < bestSolution.numberOfLinksWithExceededCapacity!!) {
-                bestSolution = bestSolutionOfGeneration
-                currentNumberOfContinuousNonBetterSolutions = 0
-            } else
-                currentNumberOfContinuousNonBetterSolutions++
-
-
-            population = takeBestDAP(population, percentOfBestChromosomes)
-            population = crossover(population, seed, pCross)
-            population = mutation(population, seed, pMutate)
-            population = fillLinkCapacitiesForNewSolutions(population, network)
-            // nie możemy w tym momencie wybrac najlepszych bo nie są obliczone koszta (dlatego przed mutacja)
-
-            println("Overload of generation " + currentGeneration + ": " + bestSolutionOfGeneration.numberOfLinksWithExceededCapacity)
-        }
-        println("Overload of best solution: " + bestSolution.numberOfLinksWithExceededCapacity!!)
-
-        return bestSolution
-    }
-
-    private fun takeBestDAP(solutions: List<Solution>, percentOfBestChromosomes: Float): MutableList<Solution> {
-        // Wybieramy x procent najlepszych
-        val subListEnd = round(solutions.size * (percentOfBestChromosomes / 100))
-        val list0 = solutions
-            .sortedWith(Comparator.comparing<Solution, Int> { it.numberOfLinksWithExceededCapacity })
-
-        val list = solutions
-            .sortedWith(Comparator.comparing<Solution, Int> { it.numberOfLinksWithExceededCapacity })
-            .subList(0, round(solutions.size * (percentOfBestChromosomes / 100)))
-            .toMutableList()
-
-        // Dopełniamy najlepszymi, aby populacja nie zmalała
-        list.addAll(list0.subList(0, solutions.size - subListEnd))
-
-        return list
-    }
+    // endregion
 }

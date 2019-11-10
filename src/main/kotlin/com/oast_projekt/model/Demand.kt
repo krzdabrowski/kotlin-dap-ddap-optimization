@@ -1,13 +1,7 @@
 package com.oast_projekt.model
 
-/**
- * @param params Parameters from input: start node, end node, volume.
- * @param demandPaths List of DemandPath objects
- * @param id
- */
-
 data class Demand (
-    private val params: List<String>,
+    private val params: List<String>,  // start node, end node, volume
     val demandPaths: List<DemandPath>,
     val id: Int = 0
 ) {
