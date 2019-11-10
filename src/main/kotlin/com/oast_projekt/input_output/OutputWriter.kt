@@ -21,6 +21,28 @@ class OutputWriter {
         }
     }
 
+    fun writeAllSolutionsToFile(fileName: String, solutions: List<Solution>?, network: Network) {
+        val allResultsToBeSavedToFile = StringBuilder()
+
+        if (solutions != null) {
+            allResultsToBeSavedToFile.append("Number of results: ${solutions.size} \n\n")
+            for (i in solutions.indices) {
+                allResultsToBeSavedToFile.append("Result no ${i+1}\n")
+                allResultsToBeSavedToFile.append(getFormattedSolution(network, solutions[i]))
+            }
+        } else {
+            allResultsToBeSavedToFile.append("No solutions found")
+        }
+
+        try {
+            PrintWriter("$fileName.txt", "UTF-8").use { writer -> writer.println(allResultsToBeSavedToFile) }
+        } catch (e: FileNotFoundException) {
+            e.printStackTrace()
+        } catch (e: UnsupportedEncodingException) {
+            e.printStackTrace()
+        }
+    }
+
     private fun getFormattedSolution(network: Network, solution: Solution): String {
         val signals = MutableList(network.links.size) { 0 } // inicjalizacja zerami
         val fibers = MutableList(network.links.size) { 0 }

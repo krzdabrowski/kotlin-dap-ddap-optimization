@@ -6,10 +6,7 @@ import com.oast_projekt.input_output.OutputWriter
 import com.oast_projekt.input_output.InputParser
 import com.oast_projekt.model.Network
 import com.oast_projekt.model.Solution
-import com.oast_projekt.utils.askUserForFloatBetweenZeroAndOne
-import com.oast_projekt.utils.askUserForInt
-import com.oast_projekt.utils.askUserForLong
-import com.oast_projekt.utils.askUserForStringWhenChoiceIs
+import com.oast_projekt.utils.*
 import java.util.Scanner
 import kotlin.system.exitProcess
 
@@ -62,35 +59,42 @@ private fun bruteforceAlgorithm() {
     }
 
     val endTime = System.nanoTime()
-    showTotalTimeAndSaveToFile("bruteforce", solution, bruteForceAlgorithm.network, startTime, endTime)
+    showTotalTimeAndSaveToFile("bruteforce", solution, bruteForceAlgorithm.allSolutions, bruteForceAlgorithm.network, startTime, endTime)
 }
 
 private fun evolutionaryAlgorithm() {
-    val population = scanner.askUserForInt("Choose start population size (chromosomes count): ")
-    val crossoverProb = scanner.askUserForFloatBetweenZeroAndOne("Choose crossover probability from 0 to 1: ")
-    val mutationProb = scanner.askUserForFloatBetweenZeroAndOne("Choose mutation probability from 0 to 1: ")
+    with (scanner) {
+        val population = askUserForInt("Choose start population size (chromosomes count): ")
+        val crossoverProb = askUserForFloatBetweenZeroAndOne("Choose crossover probability from 0 to 1: ")
+        val mutationProb = askUserForFloatBetweenZeroAndOne("Choose mutation probability from 0 to 1: ")
 
-    println("******* Stop criteria *******")
-    val maxTime = scanner.askUserForInt("Choose max work time of the algorithm [s]: ")
-    val maxNumberOfGenerations = scanner.askUserForInt("Choose max number of generations: ")
-    val maxNumberOfMutations = scanner.askUserForInt("Choose max number of mutations: ")
-    val maxNumberOfContinuousNonBetterSolutions = scanner.askUserForInt("Choose max number of the best solution improvement attempts: ")
-    val seed = scanner.askUserForLong("Choose random number generator seed: ")
-    dapOrDdap = scanner.askUserForStringWhenChoiceIs("Choose problem to solve (DAP/DDAP): ", "DAP", "DDAP")
+        println("******* Stop criteria *******")
+        val maxTime = askUserForInt("Choose max work time of the algorithm [s]: ")
+        val maxNumberOfGenerations = askUserForInt("Choose max number of generations: ")
+        val maxNumberOfMutations = askUserForInt("Choose max number of mutations: ")
+        val maxNumberOfContinuousNonBetterSolutions =
+            askUserForInt("Choose max number of the best solution improvement attempts: ")
+        val seed = askUserForLong("Choose random number generator seed: ")
+        dapOrDdap = askUserForStringWhenChoiceIs("Choose problem to solve (DAP/DDAP): ", "DAP", "DDAP")
 
-    val startTime = System.nanoTime()
-    println("Working, please wait...")
-    val evolutionaryAlgorithm = EvolutionaryAlgorithm(crossoverProb, mutationProb, maxTime, population, 70f, maxNumberOfGenerations, maxNumberOfMutations, maxNumberOfContinuousNonBetterSolutions, seed, inputParser.getNetworkFromFile())
-    val solution = if (dapOrDdap == "DAP")
-        evolutionaryAlgorithm.computeDAP()
-    else
-        evolutionaryAlgorithm.computeDDAP()
+        val startTime = System.nanoTime()
+        println("Working, please wait...")
+        val evolutionaryAlgorithm = EvolutionaryAlgorithm(crossoverProb, mutationProb, maxTime, population, PERCENT_OF_BEST_CHROMOSOMES, maxNumberOfGenerations, maxNumberOfMutations, maxNumberOfContinuousNonBetterSolutions, seed, inputParser.getNetworkFromFile())
 
-    val endTime = System.nanoTime()
-    showTotalTimeAndSaveToFile("evolutionary", solution, evolutionaryAlgorithm.network, startTime, endTime)
+        val solution = if (dapOrDdap == "DAP")
+            evolutionaryAlgorithm.computeDAP()
+        else
+            evolutionaryAlgorithm.computeDDAP()
+
+        val endTime = System.nanoTime()
+        showTotalTimeAndSaveToFile("evolutionary", solution, null, evolutionaryAlgorithm.network, startTime, endTime)
+    }
 }
 
-private fun showTotalTimeAndSaveToFile(typeOfAlgorithm: String, solution: Solution?, network: Network, startTime: Long, endTime: Long) {
+private fun showTotalTimeAndSaveToFile(typeOfAlgorithm: String, solution: Solution?, solutions: List<Solution>?, network: Network, startTime: Long, endTime: Long) {
     println("Time of optimization: " + (endTime - startTime) / 1_000_000_000 + "," + ((endTime - startTime) / 1_000_000 - (endTime - startTime) / 1_000_000_000 * 1_000) + " s")
     OutputWriter().writeSolutionToFile(path + "_solution_${typeOfAlgorithm}_${dapOrDdap}", solution, network)
+    if (solutions != null)
+        println("Saving all results to a file, this may take some additional time...")
+        OutputWriter().writeAllSolutionsToFile(path + "_allsolutions_${typeOfAlgorithm}_${dapOrDdap}", solutions, network)
 }

@@ -1,11 +1,12 @@
 package com.oast_projekt
 
-import com.google.common.collect.Lists
 import com.oast_projekt.model.*
+import com.oast_projekt.utils.computeLinksCapacitiesOfSolution
+import com.oast_projekt.utils.fillLinkCapacitiesForNewSolutions
+import com.oast_projekt.utils.getCombinationsOfOneDemand
 import java.lang.Math.*
 
 import java.util.*
-import java.util.stream.Collectors
 
 class EvolutionaryAlgorithm(
     private val pCross: Float,
@@ -48,7 +49,7 @@ class EvolutionaryAlgorithm(
 
     fun computeDDAP(): Solution {
         //Początkowa pula rozwiązań - chromosomy
-        var population: MutableList<Solution> = getInitialRandomPopulation(numberOfChromosomes, seed)
+        var population = getInitialRandomPopulation(numberOfChromosomes, seed)
 
         //Startowe najlepsze rozwiązania - koszt = infinity
         var bestSolution = Solution(HashMap())
@@ -89,7 +90,7 @@ class EvolutionaryAlgorithm(
             population = takeBestDDAP(population, percentOfBestChromosomes)
             population = crossover(population, seed, pCross)
             population = mutation(population, seed, pMutate)
-            population = fillLinkCapacitiesForNewSolutions(population)
+            population = fillLinkCapacitiesForNewSolutions(population, network)
             // nie możemy w tym momencie wybrac najlepszych bo nie są obliczone koszta (dlatego przed mutacja)
 
             println("Cost of generation " + currentGeneration + ": " + bestSolutionOfGeneration.cost)
@@ -116,11 +117,7 @@ class EvolutionaryAlgorithm(
         return list
     }
 
-    private fun crossover(
-        parents: MutableList<Solution>,
-        seed: Long,
-        probabilityOfCrossover: Float
-    ): MutableList<Solution> {
+    private fun crossover(parents: MutableList<Solution>, seed: Long, probabilityOfCrossover: Float): List<Solution> {
         val children = ArrayList<Solution>()
 
         val parentsSize = parents.size
@@ -200,7 +197,6 @@ class EvolutionaryAlgorithm(
     }
 
     private fun mutateGene(gene: Map<Point, Int>, seed: Long): Map<Point, Int> {
-
         val mutatedGene = HashMap<Point, Int>()
         val points = ArrayList<Point>()
         val values = ArrayList<Int>()
@@ -229,21 +225,7 @@ class EvolutionaryAlgorithm(
         return mutatedGene
     }
 
-
-    private fun fillLinkCapacitiesForNewSolutions(solutions: MutableList<Solution>): MutableList<Solution> {
-
-        val linksCapacities = solutions
-            .map { computeLinksCapacitiesOfSolution(it) }
-
-        for (i in solutions.indices) {
-            if (solutions[i].capacitiesOfLinks == null)
-                solutions[i].capacitiesOfLinks = linksCapacities[i]
-        }
-        return solutions
-    }
-
-
-    private fun getInitialRandomPopulation(numberOfChromosomes: Int, seed: Long): MutableList<Solution> {
+    private fun getInitialRandomPopulation(numberOfChromosomes: Int, seed: Long): List<Solution> {
 
         //Ze wszystkich możliwych kombinacji routingu (nie obliczone koszta itp) wybieramy losowe N chromosomow (numberOfChromosomes)
         val allCombinations = network.demands
@@ -260,7 +242,7 @@ class EvolutionaryAlgorithm(
         }
 
         val linksCapacities = routingPossibilities
-            .map { computeLinksCapacitiesOfSolution(it) }
+            .map { computeLinksCapacitiesOfSolution(it, network) }
 
         val list = ArrayList<Solution>()
 
@@ -272,73 +254,9 @@ class EvolutionaryAlgorithm(
         return list
     }
 
-
-    private fun getCombinations(sum: Int, numberOfElements: Int): List<List<Int>> {
-        val lists = ArrayList<List<Int>>()
-        val list = ArrayList<Int>()
-
-        for (i in 0..sum) {
-            list.add(i)
-        }
-
-        for (i in 0 until numberOfElements) {
-            lists.add(list)
-        }
-
-        return Lists.cartesianProduct<Int>(lists)
-            .filter { product -> sum == product.map { it.toInt() }.sum() }
-    }
-
-    private fun getCombinationsOfOneDemand(demand: Demand): List<Solution> {
-        val list = ArrayList<Solution>()
-        val numberOfCombinations = calculateNewtonSymbol(demand.numberOfPaths + demand.volume - 1, demand.volume)
-        val combinations = getCombinations(demand.volume, demand.numberOfPaths)
-        for (i in 0 until numberOfCombinations) {
-            val mapOfValuesForOneDemand = mutableMapOf<Point, Int>()
-            for (j in 0 until demand.numberOfPaths) {
-                val pathId = demand.demandPaths[j].id
-                mapOfValuesForOneDemand.put(Point(demand.id, pathId), combinations[i][pathId - 1])
-            }
-            list.add(Solution(mapOfValuesForOneDemand))
-
-        }
-        return list
-    }
-
-    private fun computeLinksCapacitiesOfSolution(solution: Solution): List<Int> {
-        val linksCapacities = ArrayList<Int>()
-        for (i in network.links.indices) {
-            linksCapacities.add(0)
-        }
-
-        val paths = ArrayList<DemandPath>()
-        for (demand in network.demands) {
-            paths.addAll(demand.demandPaths)
-        }
-
-        for (j in network.links.indices) {
-            var sum = 0.0
-            for (path in paths) {
-                val list = Arrays.stream(path.links).boxed().collect(Collectors.toList<Int>())
-                if (list.contains(j + 1)) {
-                    sum += solution.mapOfValues[Point(path.demandId, path.id)]!!.toDouble()
-                }
-            }
-            linksCapacities[j] = kotlin.math.ceil(sum / network.links[j].linkModule.toDouble()).toInt()
-        }
-        return linksCapacities
-    }
-
-    private fun calculateNewtonSymbol(n: Int, k: Int): Int {
-        var result: Int? = 1
-        for (i in 1..k)
-            result = result!! * (n - i + 1) / i
-        return result!!
-    }
-
     fun computeDAP(): Solution {
         //Początkowa pula rozwiązań - chromosomy
-        var population: MutableList<Solution> = getInitialRandomPopulation(numberOfChromosomes, seed)
+        var population = getInitialRandomPopulation(numberOfChromosomes, seed)
 
         //Startowe najlepsze rozwiązania - koszt = infinity
         var bestSolution = Solution(HashMap())
@@ -386,7 +304,7 @@ class EvolutionaryAlgorithm(
             population = takeBestDAP(population, percentOfBestChromosomes)
             population = crossover(population, seed, pCross)
             population = mutation(population, seed, pMutate)
-            population = fillLinkCapacitiesForNewSolutions(population)
+            population = fillLinkCapacitiesForNewSolutions(population, network)
             // nie możemy w tym momencie wybrac najlepszych bo nie są obliczone koszta (dlatego przed mutacja)
 
             println("Overload of generation " + currentGeneration + ": " + bestSolutionOfGeneration.numberOfLinksWithExceededCapacity)
