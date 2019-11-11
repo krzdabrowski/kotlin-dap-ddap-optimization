@@ -36,13 +36,8 @@ private fun getCombinations(sum: Int, numberOfElements: Int): List<List<Int>> {
         .filter { product -> sum == product.sum() }
 }
 
-fun fillLinkCapacitiesForNewSolutions(solutions: List<Solution>, network: Network): List<Solution> {
-    val linksCapacities = solutions.map { computeLinksCapacitiesOfSolution(it, network) }
-
-    for (i in solutions.indices) {
-        if (solutions[i].capacitiesOfLinks == null)
-            solutions[i].capacitiesOfLinks = linksCapacities[i]
-    }
+fun addLinkCapacitiesForSolutions(solutions: List<Solution>, network: Network): List<Solution> {
+    solutions.forEach { it.capacitiesOfLinks = computeLinksCapacitiesOfSolution(it, network) }
     return solutions
 }
 

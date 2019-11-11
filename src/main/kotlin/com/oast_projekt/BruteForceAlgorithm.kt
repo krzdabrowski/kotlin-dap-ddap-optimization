@@ -2,7 +2,7 @@ package com.oast_projekt
 
 import com.google.common.collect.Lists
 import com.oast_projekt.model.*
-import com.oast_projekt.utils.fillLinkCapacitiesForNewSolutions
+import com.oast_projekt.utils.addLinkCapacitiesForSolutions
 import com.oast_projekt.utils.getCombinationsOfOneDemand
 
 import kotlin.math.max
@@ -11,24 +11,17 @@ class BruteForceAlgorithm (
     val network: Network
 ) {
     val allSolutions: List<Solution>
-        get() = fillLinkCapacitiesForNewSolutions(getSolutions(), network)
+        get() = addLinkCapacitiesForSolutions(getSolutions(), network)
 
     private fun getSolutions(): List<Solution> {
-        val allCombinations = network.demands.map { getCombinationsOfOneDemand(it) }
+        val allCombinationsForAllDemands = network.demands.map { getCombinationsOfOneDemand(it) }  // wszystkie kombinacje dla wszystkich zapotrzebowan
 
-        val combinationOfIndexes = Lists.cartesianProduct(
-            allCombinations.map { combination -> fillListWithConsecutiveIndexes(combination.size) }
+        val combinationOfIndexes = Lists.cartesianProduct(  // iloczyn kartezjanski aby uzyskac liste indeksow, dla net4 810k indeksow (i przyszlych rozwiazan)
+            allCombinationsForAllDemands.map { combination -> List(combination.size) { it } }  // dla size = 5 -> [0,1,2,3,4]
         )
 
-        return combinationOfIndexes.map { indexes -> getSolution(allCombinations, indexes) }
-    }
-
-    private fun fillListWithConsecutiveIndexes(size: Int): List<Int> {
-        val oneCombination = mutableListOf<Int>()
-        for (j in 0 until size) {
-            oneCombination.add(j)
-        }
-        return oneCombination
+        // wylicz rozwiazanie combinationOfIndexes.size razy (810k dla net4)
+        return combinationOfIndexes.map { indexes -> getSolution(allCombinationsForAllDemands, indexes) }  // zwroc wszystkie rozwiazania dla wyliczonych kombinacji oraz indeksow
     }
 
     private fun getSolution(combinations: List<List<Solution>>, indexes: List<Int>): Solution {

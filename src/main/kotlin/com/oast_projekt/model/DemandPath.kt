@@ -5,13 +5,5 @@ data class DemandPath (
 ) {
     val id = params[0].toInt()
     var demandId: Int = 0
-    var links: IntArray
-
-    init {
-        val tempLinks = IntArray(params.size - 1)
-        for (i in 1 until params.size) {
-            tempLinks[i - 1] = params[i].toInt()
-        }
-        links = tempLinks
-    }
+    var links = params.drop(1).map { it.toInt() }  // wez kolejne krawedzie pomijajac 1szy element porzadkowy w wierszu
 }

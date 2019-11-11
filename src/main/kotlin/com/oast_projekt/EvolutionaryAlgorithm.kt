@@ -2,7 +2,7 @@ package com.oast_projekt
 
 import com.oast_projekt.model.*
 import com.oast_projekt.utils.computeLinksCapacitiesOfSolution
-import com.oast_projekt.utils.fillLinkCapacitiesForNewSolutions
+import com.oast_projekt.utils.addLinkCapacitiesForSolutions
 import com.oast_projekt.utils.getCombinationsOfOneDemand
 
 import java.util.*
@@ -94,7 +94,7 @@ class EvolutionaryAlgorithm(
             population = takeBestDDAP(population, percentOfBestChromosomes)
             population = crossover(population, crossoverProb)
             population = mutation(population, mutationProb)
-            population = fillLinkCapacitiesForNewSolutions(population, network)
+            population = addLinkCapacitiesForSolutions(population, network)
 
             println("Best cost for generation $currentGeneration: ${bestSolutionOfEachGeneration.cost}")
         }
@@ -135,7 +135,7 @@ class EvolutionaryAlgorithm(
             population = takeBestDAP(population, percentOfBestChromosomes)
             population = crossover(population, crossoverProb)
             population = mutation(population, mutationProb)
-            population = fillLinkCapacitiesForNewSolutions(population, network)
+            population = addLinkCapacitiesForSolutions(population, network)
 
             println("Overload of generation $currentGeneration: ${bestSolutionOfEachGeneration.numberOfLinksWithExceededCapacity}")
         }
