@@ -37,15 +37,15 @@ class EvolutionaryAlgorithm(
     }
 
     private fun getInitialRandomPopulation(numberOfChromosomes: Int): List<Solution> {
-        val allCombinations = network.demands.map { getCombinationsOfOneDemand(it) }
+        val allCombinationsForAllDemands = network.demands.map { getCombinationsOfOneDemand(it) }
         val allRoutingPossibilities = mutableListOf<Solution>()
         val population = mutableListOf<Solution>()
 
         // dodaj wszystkie mozliwe chromosomy z kombinacji routingu sieci
         for (i in 0 until numberOfChromosomes) {
             val chromosome = Solution(mutableMapOf())
-            for (j in allCombinations.indices) {
-                chromosome.mapOfValues.putAll(allCombinations[j][random.nextInt(allCombinations[j].size)].mapOfValues)
+            for (j in allCombinationsForAllDemands.indices) {
+                chromosome.mapOfValues.putAll(allCombinationsForAllDemands[j][random.nextInt(allCombinationsForAllDemands[j].size)].mapOfValues)
             }
             allRoutingPossibilities.add(chromosome)
         }
@@ -166,7 +166,7 @@ class EvolutionaryAlgorithm(
     private fun crossover(parents: MutableList<Solution>, probabilityOfCrossover: Float): List<Solution> {
         val children = mutableListOf<Solution>()
 
-        // 2 rodzicow krzyzowanych naraz, wiec iteracji jest polowa
+        // 2 rodzicow krzyzowanych naraz, wiec iteracji jest polowa; uzyci rodzice sa usuwani
         for (i in 0 until parents.size / 2) {
             children.addAll(crossParents(parents.removeAt(random.nextInt(parents.size)), parents.removeAt(random.nextInt(parents.size)), probabilityOfCrossover))
         }
@@ -216,27 +216,22 @@ class EvolutionaryAlgorithm(
 
     private fun mutateGene(gene: Map<Point, Int>): Map<Point, Int> {
         val mutatedGene = mutableMapOf<Point, Int>()
-        val points = mutableListOf<Point>()
-        val values = mutableListOf<Int>()
-
-        for ((key, value) in gene) {
-            points.add(key)
-            values.add(value)
-        }
+        val points = gene.keys.toMutableList()
+        val values = gene.values.toMutableList()
 
         for (i in values.indices) {
             val first = random.nextInt(values.size)
             val second = random.nextInt(values.size)
 
-            if (values[first] != 0) {
-                values[first] = values[first] - 1
-                values[second] = values[second] + 1
+            if (values[first] != 0) {  // przerzuc jednostke zapotrzebowania miedzy sciezkami
+                values[first]--
+                values[second]++
                 break
             }
         }
 
-        for (i in 0 until gene.size) {
-            mutatedGene[points.removeAt(0)] = values.removeAt(0)
+        for (i in values.indices) {
+            mutatedGene[points[i]] = values[i]  // dodaj zmutowany gen
         }
 
         return mutatedGene
