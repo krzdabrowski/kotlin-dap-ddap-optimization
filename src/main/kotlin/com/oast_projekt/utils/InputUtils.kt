@@ -3,7 +3,7 @@ package com.oast_projekt.utils
 import java.util.*
 
 fun Scanner.askUserForInt(message: String): Int {
-    var answer = 0
+    var answer: Int
 
     do {
         println(message)
@@ -18,7 +18,7 @@ fun Scanner.askUserForInt(message: String): Int {
 }
 
 fun Scanner.askUserForFloatBetweenZeroAndOne(message: String): Float {
-    var answer = 0f
+    var answer: Float
 
     do {
         println(message)
@@ -33,7 +33,7 @@ fun Scanner.askUserForFloatBetweenZeroAndOne(message: String): Float {
 }
 
 fun Scanner.askUserForLong(message: String): Long {
-    var answer = 0L
+    var answer: Long
 
     do {
         println(message)
@@ -48,7 +48,7 @@ fun Scanner.askUserForLong(message: String): Long {
 }
 
 fun Scanner.askUserForStringWhenChoiceIs(message: String, firstChoice: String, secondChoice: String): String {
-    var answer = ""
+    var answer: String
     println(message)
 
     do {
